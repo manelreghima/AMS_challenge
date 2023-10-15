@@ -96,7 +96,8 @@ def build_customer_journeys(df_conversions, df_session_sources,df_session_costs)
                                          'holder_engagement', 'closer_engagement', 'cost', 'impression_interaction']]
 
         valid_sessions['cost'] = np.where(valid_sessions['cost'].isnull(), 0, 1)
-        valid_sessions.rename(columns={'conv_id': 'conversion_id	', 'B': 'Y'}, inplace=True)
+        valid_sessions.rename(columns={'conv_id': 'conversion_id', 'event_time': 'timestamp',
+                                       'channel_name':'channel_label','cost':'conversion'}, inplace=True)
 
         # Create a list of dictionaries from the valid sessions DataFrame
         customer_journey = valid_sessions.to_dict(orient='records')
