@@ -115,7 +115,7 @@ def build_customer_journeys(df_conversions, df_session_sources,df_session_costs)
 
 def save_customer_journeys_to_csv(customer_journeys):
     # Define the CSV file path
-    csv_file_path = 'customer_journeys.csv'
+    csv_file_path = 'ihc_parameter_training_set.csv'
 
     # Define the field names for the CSV header
     field_names = customer_journeys[0].keys() if customer_journeys else []
