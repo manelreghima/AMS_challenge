@@ -27,21 +27,24 @@ def connect():
 
         # fetch data from the conversion table and store in a DataFrame
         df_conversions = fetch_data(conn, 'conversions')
-        #print(df_conversions)
 
         # fetch data from the session_sources table and store in another DataFrame
         df_session_sources = fetch_data(conn, 'session_sources')
-        #print(df_session_sources)
 
         # fetch data from the session_costs table and store in another DataFrame
         df_session_costs = fetch_data(conn, 'session_costs')
-        #print(df_session_costs)
 
         # Close the communication with the PostgreSQL
         cur.close()
 
         # Build customer journeys
-        build_customer_journeys(df_conversions, df_session_sources,df_session_costs)
+        build_customer_journeys(df_conversions, df_session_sources, df_session_costs)
+        
+        attribution_customer_journey=create_attribution_customer_journey()
+        print(attribution_customer_journey)
+        write_to_db(conn, attribution_customer_journey, "attribution_customer_journey")
+
+    
 
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
@@ -50,24 +53,40 @@ def connect():
             conn.close()
             print('Database connection closed.')
 
+def read_csv_data(file_path):
+    """ Read data from the specified CSV and return as DataFrame """
+    try:
+        df = pd.read_csv(file_path)
+        return df
+    except Exception as error:
+        print(f"Error reading data from {file_path}:", error)
+        return None
+
+def insert_data_to_table(conn, table_name, df):
+    """ Insert DataFrame data into the specified table """
+    try:
+        # Use the pandas DataFrame's to_sql function
+        df.to_sql(table_name, conn, if_exists='append', index=False)
+        print(f"Data inserted into {table_name} successfully.")
+    except (Exception, psycopg2.DatabaseError) as error:
+        print(f"Error inserting data into {table_name} table:", error)
+
 def fetch_data(conn, table_name):
     """ Fetch data from the specified table and return as DataFrame """
     try:
-        # Use pandas to directly fetch data into a DataFrame
         query = f'SELECT * FROM {table_name}'
         df = pd.read_sql(query, conn)
         return df
-
     except (Exception, psycopg2.DatabaseError) as error:
         print(f"Error fetching data from {table_name} table:", error)
         return None
+
 
 def build_customer_journeys(df_conversions, df_session_sources,df_session_costs):
     # Merge the two DataFrames on the 'user_id' column
     merged_session_sources_costs=pd.merge(df_session_sources,df_session_costs, on='session_id')
     #print(merged_session_sources_costs)
     merged_df = pd.merge(merged_session_sources_costs, df_conversions, on='user_id')
-    print(merged_df)
 
     # Convert the timestamp columns to datetime objects
     merged_df['event_time'] = pd.to_datetime(merged_df['event_time'])
@@ -98,6 +117,8 @@ def build_customer_journeys(df_conversions, df_session_sources,df_session_costs)
         valid_sessions['cost'] = np.where(valid_sessions['cost'].isnull(), 0, 1)
         valid_sessions.rename(columns={'conv_id': 'conversion_id', 'event_time': 'timestamp',
                                        'channel_name':'channel_label','cost':'conversion'}, inplace=True)
+        
+    
 
         # Create a list of dictionaries from the valid sessions DataFrame
         customer_journey = valid_sessions.to_dict(orient='records')
@@ -113,7 +134,6 @@ def build_customer_journeys(df_conversions, df_session_sources,df_session_costs)
     # Save the customer journeys to a CSV file
     save_customer_journeys_to_csv(customer_journeys)
 
-
 def save_customer_journeys_to_csv(customer_journeys):
     # Define the CSV file path
     csv_file_path = 'ihc_parameter_training_set.csv'
@@ -128,6 +148,42 @@ def save_customer_journeys_to_csv(customer_journeys):
         writer.writerows(customer_journeys)
 
     print(f'Customer journeys saved to {csv_file_path}')
+
+
+def create_attribution_customer_journey():
+    
+    # Load the CSV files into dataframes
+    df_ihc_channel_weights = pd.read_csv('IHC_channel_weights.csv')
+    df_ihc_parameter_training_set = pd.read_csv('ihc_parameter_training_set.csv')
+
+    # Merge the dataframes on the channel columns
+    df_merged = pd.merge(df_ihc_parameter_training_set, df_ihc_channel_weights, 
+                         left_on="channel_label", right_on="channel", how="left")
+
+    # Drop the redundant "channel" column
+    df_merged.drop("channel", axis=1, inplace=True)
+    df_merged = df_merged[['conversion_id', 'session_id', 'initializer weight', 'holder weight', 'closer weight']]
+    df_merged.rename(columns={'conversion_id': 'conv_id'}, inplace=True)
+    df_merged['ihc'] = 1/3 * df_merged['initializer weight'] + 1/3 * df_merged['holder weight'] + 1/3 * df_merged['closer weight']
+    df_merged.drop(['initializer weight', 'holder weight', 'closer weight'], axis=1, inplace=True)
+
+    return df_merged
+
+def write_to_db(conn, df, table_name):
+    """ Write the DataFrame to the specified table in the database """
+    try:
+        # Use the pandas DataFrame's to_sql function
+        # Use a dummy sqlalchemy engine since pandas requires it
+        from sqlalchemy import create_engine
+        engine = create_engine('postgresql+psycopg2://', creator=lambda: conn)
+        
+        df.to_sql(table_name, engine, if_exists='replace', index=False)
+        print(f"Data written to {table_name} successfully.")
+    except (Exception, psycopg2.DatabaseError) as error:
+        print(f"Error writing data to {table_name} table:", error)
+
+
+
 
 if __name__ == '__main__':
     connect()
