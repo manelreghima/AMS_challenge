@@ -4,6 +4,8 @@ import pandas as pd
 import numpy as np
 import csv
 from config import config
+from sqlalchemy import create_engine
+
 
 def connect():
     """ Connect to the PostgreSQL database server """
@@ -221,14 +223,18 @@ def create_channel_reporting(df_session_sources, df_session_costs, df_attributio
 def write_to_db(conn, df, table_name):
     """ Write the DataFrame to the specified table in the database """
     try:
-        # Use the pandas DataFrame's to_sql function
-        # Use a dummy sqlalchemy engine since pandas requires it
-        from sqlalchemy import create_engine
+        
+        # Create a SQLAlchemy engine using psycopg2 and the given database connection
         engine = create_engine('postgresql+psycopg2://', creator=lambda: conn)
         
+        # Use pandas to_sql method to write the DataFrame to the database
+        # The table is replaced if it already exists
         df.to_sql(table_name, engine, if_exists='replace', index=False)
+
+        # Notify that the data has been successfully written to the table
         print(f"Data written to {table_name} successfully.")
     except (Exception, psycopg2.DatabaseError) as error:
+        # Print an error message in case of exceptions during the process
         print(f"Error writing data to {table_name} table:", error)
 
 
