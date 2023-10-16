@@ -9,53 +9,57 @@ def connect():
     """ Connect to the PostgreSQL database server """
     conn = None
     try:
-        # read connection parameters
+        # Read connection parameters from a configuration
         params = config()
 
-        # connect to the PostgreSQL server
+        # Connect to the PostgreSQL server
         print('Connecting to the PostgreSQL database...')
         conn = psycopg2.connect(**params)
 
-        # create a cursor
+        # Create a new cursor to execute PostgreSQL commands
         cur = conn.cursor()
 
-        # execute a statement to display PostgreSQL version
+        # Execute a statement to fetch and display the PostgreSQL version
         print('PostgreSQL database version:')
         cur.execute('SELECT version()')
         db_version = cur.fetchone()
         print(db_version)
 
-        # fetch data from the conversion table and store in a DataFrame
+        # Fetch data from the 'conversions' table and store it in a DataFrame
         df_conversions = fetch_data(conn, 'conversions')
 
-        # fetch data from the session_sources table and store in another DataFrame
+        # Fetch data from the 'session_sources' table and store it in a DataFrame
         df_session_sources = fetch_data(conn, 'session_sources')
 
-        # fetch data from the session_costs table and store in another DataFrame
+        # Fetch data from the 'session_costs' table and store it in a DataFrame
         df_session_costs = fetch_data(conn, 'session_costs')
 
-        # Close the communication with the PostgreSQL
+        # Close the cursor to free up resources
         cur.close()
 
-        # Build customer journeys
+        # Process and combine the fetched data to build customer journeys
         build_customer_journeys(df_conversions, df_session_sources, df_session_costs)
         
-        df_attribution_customer_journey=create_attribution_customer_journey()
+        # Compute and store the attribution for each customer journey
+        df_attribution_customer_journey = create_attribution_customer_journey()
 
-        df_channel_reporting =create_channel_reporting(df_session_sources,df_session_costs, df_attribution_customer_journey, df_conversions)
+        # Create a report for each channel based on the session sources, costs, attributions, and conversions
+        df_channel_reporting = create_channel_reporting(df_session_sources, df_session_costs, df_attribution_customer_journey, df_conversions)
         
+        # Write the computed attribution for customer journeys back to the database
         write_to_db(conn, df_attribution_customer_journey, "attribution_customer_journey")
         
+        # Write the channel reporting data back to the database
         write_to_db(conn, df_channel_reporting, "channel_reporting")
         
-        final_channel_reporting=compute_metrics_and_export_csv(df_channel_reporting)
-        
+        # Further compute metrics on channel reporting and export the results as a CSV
+        final_channel_reporting = compute_metrics_and_export_csv(df_channel_reporting)
 
-    
-
+    # Handle any exceptions that arise during database operations
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
     finally:
+        # Ensure the database connection is closed after operations
         if conn is not None:
             conn.close()
             print('Database connection closed.')
