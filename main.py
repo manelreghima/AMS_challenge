@@ -161,7 +161,6 @@ def save_customer_journeys_to_csv(customer_journeys):
 
     print(f'Customer journeys saved to {csv_file_path}')
 
-
 def create_attribution_customer_journey():
     
     # Load channel weights from CSV into a DataFrame
