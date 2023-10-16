@@ -93,56 +93,55 @@ def fetch_data(conn, table_name):
         return None
 
 
-def build_customer_journeys(df_conversions, df_session_sources,df_session_costs):
-    # Merge the two DataFrames on the 'user_id' column
-    merged_session_sources_costs=pd.merge(df_session_sources,df_session_costs, on='session_id')
-    #print(merged_session_sources_costs)
+def build_customer_journeys(df_conversions, df_session_sources, df_session_costs):
+    # Merge session sources and session costs DataFrames based on the 'session_id' column
+    merged_session_sources_costs = pd.merge(df_session_sources, df_session_costs, on='session_id')
+
+    # Further merge the resulting DataFrame with the conversions DataFrame based on the 'user_id' column
     merged_df = pd.merge(merged_session_sources_costs, df_conversions, on='user_id')
 
-    # Convert the timestamp columns to datetime objects
+    # Convert 'event_time' and 'conv_time' columns to proper datetime format for further operations
     merged_df['event_time'] = pd.to_datetime(merged_df['event_time'])
     merged_df['conv_time'] = pd.to_datetime(merged_df['conv_time'])
 
-    # Initialize an empty list to store customer journeys
+    # Create an empty list to hold individual customer journeys
     customer_journeys = []
 
-    # Group the data by 'conv_id' and 'user_id'
+    # Group the merged DataFrame by 'conv_id' (conversion ID) and 'user_id' for further processing
     grouped = merged_df.groupby(['conv_id', 'user_id'])
 
+    # Iterate through each group based on the 'conv_id' and 'user_id' combination
     for (conv_id, user_id), group_data in grouped:
-        # Sort the group_data by 'event_time' in ascending order
+        # Sort the data within the group based on 'event_time'
         group_data = group_data.sort_values(by='event_time', ascending=True)
 
-        # Find the index where 'event_time' is greater than or equal to 'conv_time'
+        # Identify entries where the 'event_time' is after the conversion time
         idx = group_data['event_time'] >= group_data['conv_time'].values[0]
 
-        # Filter sessions that happened before the conversion timestamp
+        # Keep only the valid sessions that happened before the actual conversion
         valid_sessions = group_data.loc[idx]
-        print(valid_sessions)
-        #valid_sessions['revenue'] = np.where(valid_sessions['revenue'].isnull(), 0, 1)
 
-        # Rearrange the columns in the DataFrame to match the specified order
+        # Reorder the columns in the DataFrame to a specific sequence and handle missing values in 'cost' column
         valid_sessions = valid_sessions[['conv_id', 'session_id', 'event_time', 'channel_name',
                                          'holder_engagement', 'closer_engagement', 'cost', 'impression_interaction']]
-
         valid_sessions['cost'] = np.where(valid_sessions['cost'].isnull(), 0, 1)
-        valid_sessions.rename(columns={'conv_id': 'conversion_id', 'event_time': 'timestamp',
-                                       'channel_name':'channel_label','cost':'conversion'}, inplace=True)
-        
-    
 
-        # Create a list of dictionaries from the valid sessions DataFrame
+        # Rename specific columns to more descriptive names
+        valid_sessions.rename(columns={'conv_id': 'conversion_id', 'event_time': 'timestamp',
+                                       'channel_name': 'channel_label', 'cost': 'conversion'}, inplace=True)
+
+        # Convert the valid sessions DataFrame into a list of dictionaries
         customer_journey = valid_sessions.to_dict(orient='records')
 
-        # Append the customer journey to the list
+        # Append each individual customer journey to the main list
         customer_journeys.extend(customer_journey)
 
-    # Print the resulting customer journeys
+    # Display the constructed customer journeys for verification
     print('Customer journey (List of Dictionaries)')
     for journey in customer_journeys:
         print(journey)
 
-    # Save the customer journeys to a CSV file
+    # Store the final list of customer journeys in a CSV file for further analysis or record-keeping
     save_customer_journeys_to_csv(customer_journeys)
 
 def save_customer_journeys_to_csv(customer_journeys):
