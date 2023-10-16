@@ -160,26 +160,26 @@ def create_attribution_customer_journey():
     df_ihc_parameter_training_set = pd.read_csv('ihc_parameter_training_set.csv')
 
     # Merge the dataframes on the channel columns
-    df_merged = pd.merge(df_ihc_parameter_training_set, df_ihc_channel_weights, 
+    df_attribution_customer_journey = pd.merge(df_ihc_parameter_training_set, df_ihc_channel_weights, 
                          left_on="channel_label", right_on="channel", how="left")
     
     # Select specified columns
-    df_merged = df_merged[['conversion_id','session_id','channel','impression_interaction','holder_engagement','closer_engagement',
+    df_attribution_customer_journey = df_attribution_customer_journey[['conversion_id','session_id','channel','impression_interaction','holder_engagement','closer_engagement',
                            'initializer weight','holder weight','closer weight']]
     
-    df_merged.rename(columns={'conversion_id': 'conv_id'}, inplace=True)
+    df_attribution_customer_journey.rename(columns={'conversion_id': 'conv_id'}, inplace=True)
 
-    df_merged['I'] = df_merged['impression_interaction'] * df_merged['initializer weight']
-    df_merged['H'] = df_merged['holder_engagement'] * df_merged['holder weight']
-    df_merged['C'] = df_merged['closer_engagement'] * df_merged['closer weight']  
+    df_attribution_customer_journey['I'] = df_attribution_customer_journey['impression_interaction'] * df_attribution_customer_journey['initializer weight']
+    df_attribution_customer_journey['H'] = df_attribution_customer_journey['holder_engagement'] * df_attribution_customer_journey['holder weight']
+    df_attribution_customer_journey['C'] = df_attribution_customer_journey['closer_engagement'] * df_attribution_customer_journey['closer weight']  
     
-    df_merged = df_merged.drop(columns=['channel','impression_interaction','holder_engagement','closer_engagement',
+    df_attribution_customer_journey = df_attribution_customer_journey.drop(columns=['channel','impression_interaction','holder_engagement','closer_engagement',
                                         'initializer weight','holder weight','closer weight'])
 
     
-    df_merged['ihc'] = (df_merged['I'] + df_merged['H'] + df_merged['C']) / 3 
-    print(df_merged)
-    return df_merged
+    df_attribution_customer_journey['ihc'] = (df_attribution_customer_journey['I'] + df_attribution_customer_journey['H'] + df_attribution_customer_journey['C']) / 3 
+    df_attribution_customer_journey = df_attribution_customer_journey.drop(columns=['I','H','C'])
+    return df_attribution_customer_journey
 
 def write_to_db(conn, df, table_name):
     """ Write the DataFrame to the specified table in the database """
