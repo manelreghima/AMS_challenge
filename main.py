@@ -41,11 +41,12 @@ def connect():
         build_customer_journeys(df_conversions, df_session_sources, df_session_costs)
         
         df_attribution_customer_journey=create_attribution_customer_journey()
-
-        print(df_attribution_customer_journey)
+        df_channel_reporting =create_channel_reporting(df_session_sources,df_session_costs, df_attribution_customer_journey, df_conversions)
+        
         write_to_db(conn, df_attribution_customer_journey, "attribution_customer_journey")
+        write_to_db(conn, df_channel_reporting, "channel_reporting")
         channel_report = create_channel_reporting(df_session_sources, df_session_costs,df_attribution_customer_journey,df_conversions)
-        #print(channel_report)
+        
 
     
 
@@ -196,36 +197,24 @@ def write_to_db(conn, df, table_name):
 
 
 
-def create_channel_reporting(session_sources_df, session_costs_df, attribution_customer_journey_df, conversions_df):
-    """
-    Create a channel reporting dataframe from the given dataframes.
-
-    Args:
-    - session_sources_df (pd.DataFrame): The session sources dataframe.
-    - session_costs_df (pd.DataFrame): The session costs dataframe.
-    - attribution_customer_journey_df (pd.DataFrame): The attribution customer journey dataframe.
-    - conversions_df (pd.DataFrame): The conversions dataframe.
-
-    Returns:
-    - pd.DataFrame: The channel reporting dataframe.
-    """
+def create_channel_reporting(df_session_sources, df_session_costs, df_attribution_customer_journey, df_conversions):
     
     # Merge the dataframes based on session_id and conv_id
-    merged_df = session_sources_df.merge(session_costs_df, on='session_id', how='left').merge(
-        attribution_customer_journey_df, on='session_id', how='left').merge(
-        conversions_df, on='user_id', how='left')
+    merged_df = df_session_sources.merge(df_session_costs, on='session_id', how='left').merge(
+        df_attribution_customer_journey, on='session_id', how='left').merge(
+        df_conversions, on='user_id', how='left')
 
     # Group by channel_name and event_date to aggregate required data
-    channel_reporting_df = merged_df.groupby(['channel_name', 'event_date']).agg({
+    df_channel_reporting = merged_df.groupby(['channel_name', 'event_date']).agg({
         'cost': 'sum',
         'ihc': 'sum',
         'revenue': lambda x: (x * merged_df['ihc']).sum()
     }).reset_index()
 
     # Rename the columns
-    channel_reporting_df.columns = ['channel_name', 'date', 'cost', 'ihc', 'ihc_revenue']
+    df_channel_reporting.columns = ['channel_name', 'date', 'cost', 'ihc', 'ihc_revenue']
 
-    return channel_reporting_df
+    return df_channel_reporting
 
 
 if __name__ == '__main__':
