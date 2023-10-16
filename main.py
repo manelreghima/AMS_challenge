@@ -199,23 +199,24 @@ def create_attribution_customer_journey():
 
 def create_channel_reporting(df_session_sources, df_session_costs, df_attribution_customer_journey, df_conversions):
     
-    # Merge the dataframes based on session_id and conv_id
+    # Merge session sources, session costs, customer journey attribution, and conversions DataFrames sequentially on session_id and user_id
     merged_df = df_session_sources.merge(df_session_costs, on='session_id', how='left').merge(
         df_attribution_customer_journey, on='session_id', how='left').merge(
         df_conversions, on='user_id', how='left')
 
-    # Group by channel_name and event_date to aggregate required data
+    # Group the merged data by 'channel_name' and 'event_date' and then aggregate to compute the sum of costs, sum of ihc scores, and the ihc-weighted revenue
     df_channel_reporting = merged_df.groupby(['channel_name', 'event_date']).agg({
         'cost': 'sum',
         'ihc': 'sum',
+        # Calculate the weighted revenue using the 'ihc' (Initializer, Holder, Closer) score
         'revenue': lambda x: (x * merged_df['ihc']).sum()
     }).reset_index()
 
-    # Rename the columns
+    # Rename columns for clarity in the resulting DataFrame
     df_channel_reporting.columns = ['channel_name', 'date', 'cost', 'ihc', 'ihc_revenue']
 
+    # Return the channel-wise reporting DataFrame with aggregated values
     return df_channel_reporting
-
 
 def write_to_db(conn, df, table_name):
     """ Write the DataFrame to the specified table in the database """
