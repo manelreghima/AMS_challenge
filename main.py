@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#author: Manel Reghima
 import psycopg2
 import pandas as pd
 import numpy as np
