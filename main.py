@@ -242,14 +242,8 @@ def compute_metrics_and_export_csv(df_channel_reporting,file_name="channel_repor
     # Compute CPO
     df_channel_reporting['CPO'] = df_channel_reporting['cost'] / df_channel_reporting['ihc']
     
-    # Handle cases where ihc is 0 (to avoid infinity values)
-    df_channel_reporting['CPO'] = df_channel_reporting['CPO'].replace([float('inf'), -float('inf')], 0)
-    
     # Compute ROAS
     df_channel_reporting['ROAS'] = df_channel_reporting['ihc_revenue'] / df_channel_reporting['cost']
-    
-    # Handle cases where cost is 0 (to avoid infinity values)
-    df_channel_reporting['ROAS'] = df_channel_reporting['ROAS'].replace([float('inf'), -float('inf')], 0)
     
     # Export to CSV
     df_channel_reporting.to_csv(file_name, index=False)
