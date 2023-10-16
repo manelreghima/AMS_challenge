@@ -41,11 +41,14 @@ def connect():
         build_customer_journeys(df_conversions, df_session_sources, df_session_costs)
         
         df_attribution_customer_journey=create_attribution_customer_journey()
+
         df_channel_reporting =create_channel_reporting(df_session_sources,df_session_costs, df_attribution_customer_journey, df_conversions)
         
         write_to_db(conn, df_attribution_customer_journey, "attribution_customer_journey")
+        
         write_to_db(conn, df_channel_reporting, "channel_reporting")
-        channel_report = create_channel_reporting(df_session_sources, df_session_costs,df_attribution_customer_journey,df_conversions)
+        
+        final_channel_reporting=compute_metrics_and_export_csv(df_channel_reporting)
         
 
     
@@ -182,21 +185,6 @@ def create_attribution_customer_journey():
     df_attribution_customer_journey = df_attribution_customer_journey.drop(columns=['I','H','C'])
     return df_attribution_customer_journey
 
-def write_to_db(conn, df, table_name):
-    """ Write the DataFrame to the specified table in the database """
-    try:
-        # Use the pandas DataFrame's to_sql function
-        # Use a dummy sqlalchemy engine since pandas requires it
-        from sqlalchemy import create_engine
-        engine = create_engine('postgresql+psycopg2://', creator=lambda: conn)
-        
-        df.to_sql(table_name, engine, if_exists='replace', index=False)
-        print(f"Data written to {table_name} successfully.")
-    except (Exception, psycopg2.DatabaseError) as error:
-        print(f"Error writing data to {table_name} table:", error)
-
-
-
 def create_channel_reporting(df_session_sources, df_session_costs, df_attribution_customer_journey, df_conversions):
     
     # Merge the dataframes based on session_id and conv_id
@@ -215,6 +203,39 @@ def create_channel_reporting(df_session_sources, df_session_costs, df_attributio
     df_channel_reporting.columns = ['channel_name', 'date', 'cost', 'ihc', 'ihc_revenue']
 
     return df_channel_reporting
+
+
+def write_to_db(conn, df, table_name):
+    """ Write the DataFrame to the specified table in the database """
+    try:
+        # Use the pandas DataFrame's to_sql function
+        # Use a dummy sqlalchemy engine since pandas requires it
+        from sqlalchemy import create_engine
+        engine = create_engine('postgresql+psycopg2://', creator=lambda: conn)
+        
+        df.to_sql(table_name, engine, if_exists='replace', index=False)
+        print(f"Data written to {table_name} successfully.")
+    except (Exception, psycopg2.DatabaseError) as error:
+        print(f"Error writing data to {table_name} table:", error)
+
+
+def compute_metrics_and_export_csv(df_channel_reporting,file_name="channel_reporting_with_metrics.csv"):
+    # Compute CPO
+    df_channel_reporting['CPO'] = df_channel_reporting['cost'] / df_channel_reporting['ihc']
+    
+    # Handle cases where ihc is 0 (to avoid infinity values)
+    df_channel_reporting['CPO'] = df_channel_reporting['CPO'].replace([float('inf'), -float('inf')], 0)
+    
+    # Compute ROAS
+    df_channel_reporting['ROAS'] = df_channel_reporting['ihc_revenue'] / df_channel_reporting['cost']
+    
+    # Handle cases where cost is 0 (to avoid infinity values)
+    df_channel_reporting['ROAS'] = df_channel_reporting['ROAS'].replace([float('inf'), -float('inf')], 0)
+    
+    # Export to CSV
+    df_channel_reporting.to_csv(file_name, index=False)
+    
+    print(f"Data exported to {file_name}")
 
 
 if __name__ == '__main__':
