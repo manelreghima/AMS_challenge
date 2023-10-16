@@ -40,9 +40,12 @@ def connect():
         # Build customer journeys
         build_customer_journeys(df_conversions, df_session_sources, df_session_costs)
         
-        attribution_customer_journey=create_attribution_customer_journey()
-        print(attribution_customer_journey)
-        write_to_db(conn, attribution_customer_journey, "attribution_customer_journey")
+        df_attribution_customer_journey=create_attribution_customer_journey()
+
+        print(df_attribution_customer_journey)
+        write_to_db(conn, df_attribution_customer_journey, "attribution_customer_journey")
+        channel_report = create_channel_reporting(df_session_sources, df_session_costs,df_attribution_customer_journey,df_conversions)
+        #print(channel_report)
 
     
 
@@ -150,7 +153,6 @@ def save_customer_journeys_to_csv(customer_journeys):
     print(f'Customer journeys saved to {csv_file_path}')
 
 
-
 def create_attribution_customer_journey():
     
     # Load the CSV files into dataframes
@@ -160,14 +162,23 @@ def create_attribution_customer_journey():
     # Merge the dataframes on the channel columns
     df_merged = pd.merge(df_ihc_parameter_training_set, df_ihc_channel_weights, 
                          left_on="channel_label", right_on="channel", how="left")
-
-    # Drop the redundant "channel" column
-    df_merged.drop("channel", axis=1, inplace=True)
-    df_merged = df_merged[['conversion_id', 'session_id', 'initializer weight', 'holder weight', 'closer weight']]
+    
+    # Select specified columns
+    df_merged = df_merged[['conversion_id','session_id','channel','impression_interaction','holder_engagement','closer_engagement',
+                           'initializer weight','holder weight','closer weight']]
+    
     df_merged.rename(columns={'conversion_id': 'conv_id'}, inplace=True)
-    df_merged['ihc'] = 1/3 * df_merged['initializer weight'] + 1/3 * df_merged['holder weight'] + 1/3 * df_merged['closer weight']
-    df_merged.drop(['initializer weight', 'holder weight', 'closer weight'], axis=1, inplace=True)
 
+    df_merged['I'] = df_merged['impression_interaction'] * df_merged['initializer weight']
+    df_merged['H'] = df_merged['holder_engagement'] * df_merged['holder weight']
+    df_merged['C'] = df_merged['closer_engagement'] * df_merged['closer weight']  
+    
+    df_merged = df_merged.drop(columns=['channel','impression_interaction','holder_engagement','closer_engagement',
+                                        'initializer weight','holder weight','closer weight'])
+
+    
+    df_merged['ihc'] = (df_merged['I'] + df_merged['H'] + df_merged['C']) / 3 
+    print(df_merged)
     return df_merged
 
 def write_to_db(conn, df, table_name):
@@ -184,6 +195,37 @@ def write_to_db(conn, df, table_name):
         print(f"Error writing data to {table_name} table:", error)
 
 
+
+def create_channel_reporting(session_sources_df, session_costs_df, attribution_customer_journey_df, conversions_df):
+    """
+    Create a channel reporting dataframe from the given dataframes.
+
+    Args:
+    - session_sources_df (pd.DataFrame): The session sources dataframe.
+    - session_costs_df (pd.DataFrame): The session costs dataframe.
+    - attribution_customer_journey_df (pd.DataFrame): The attribution customer journey dataframe.
+    - conversions_df (pd.DataFrame): The conversions dataframe.
+
+    Returns:
+    - pd.DataFrame: The channel reporting dataframe.
+    """
+    
+    # Merge the dataframes based on session_id and conv_id
+    merged_df = session_sources_df.merge(session_costs_df, on='session_id', how='left').merge(
+        attribution_customer_journey_df, on='session_id', how='left').merge(
+        conversions_df, on='user_id', how='left')
+
+    # Group by channel_name and event_date to aggregate required data
+    channel_reporting_df = merged_df.groupby(['channel_name', 'event_date']).agg({
+        'cost': 'sum',
+        'ihc': 'sum',
+        'revenue': lambda x: (x * merged_df['ihc']).sum()
+    }).reset_index()
+
+    # Rename the columns
+    channel_reporting_df.columns = ['channel_name', 'date', 'cost', 'ihc', 'ihc_revenue']
+
+    return channel_reporting_df
 
 
 if __name__ == '__main__':
