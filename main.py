@@ -162,30 +162,39 @@ def save_customer_journeys_to_csv(customer_journeys):
 
 def create_attribution_customer_journey():
     
-    # Load the CSV files into dataframes
+    # Load channel weights from CSV into a DataFrame
     df_ihc_channel_weights = pd.read_csv('IHC_channel_weights.csv')
+    
+    # Load parameter training set from CSV into another DataFrame
     df_ihc_parameter_training_set = pd.read_csv('ihc_parameter_training_set.csv')
 
-    # Merge the dataframes on the channel columns
+    # Merge the training set DataFrame with the channel weights DataFrame on their channel labels
     df_attribution_customer_journey = pd.merge(df_ihc_parameter_training_set, df_ihc_channel_weights, 
                          left_on="channel_label", right_on="channel", how="left")
     
-    # Select specified columns
-    df_attribution_customer_journey = df_attribution_customer_journey[['conversion_id','session_id','channel','impression_interaction','holder_engagement','closer_engagement',
-                           'initializer weight','holder weight','closer weight']]
+    # Filter and retain only the required columns from the merged DataFrame
+    df_attribution_customer_journey = df_attribution_customer_journey[['conversion_id', 'session_id', 'channel', 'impression_interaction', 'holder_engagement', 'closer_engagement',
+                           'initializer weight', 'holder weight', 'closer weight']]
     
+    # Rename the 'conversion_id' column to 'conv_id'
     df_attribution_customer_journey.rename(columns={'conversion_id': 'conv_id'}, inplace=True)
 
+    # Calculate interaction weights for initializer (I), holder (H), and closer (C) based on engagement values and corresponding weights
     df_attribution_customer_journey['I'] = df_attribution_customer_journey['impression_interaction'] * df_attribution_customer_journey['initializer weight']
     df_attribution_customer_journey['H'] = df_attribution_customer_journey['holder_engagement'] * df_attribution_customer_journey['holder weight']
-    df_attribution_customer_journey['C'] = df_attribution_customer_journey['closer_engagement'] * df_attribution_customer_journey['closer weight']  
+    df_attribution_customer_journey['C'] = df_attribution_customer_journey['closer_engagement'] * df_attribution_customer_journey['closer weight']
     
-    df_attribution_customer_journey = df_attribution_customer_journey.drop(columns=['channel','impression_interaction','holder_engagement','closer_engagement',
-                                        'initializer weight','holder weight','closer weight'])
+    # Remove the intermediate columns that are no longer needed
+    df_attribution_customer_journey = df_attribution_customer_journey.drop(columns=['channel', 'impression_interaction', 'holder_engagement', 'closer_engagement',
+                                        'initializer weight', 'holder weight', 'closer weight'])
 
+    # Calculate the overall IHC (Initializer, Holder, Closer) score by averaging the weights of I, H, and C
+    df_attribution_customer_journey['ihc'] = (df_attribution_customer_journey['I'] + df_attribution_customer_journey['H'] + df_attribution_customer_journey['C']) / 3
     
-    df_attribution_customer_journey['ihc'] = (df_attribution_customer_journey['I'] + df_attribution_customer_journey['H'] + df_attribution_customer_journey['C']) / 3 
-    df_attribution_customer_journey = df_attribution_customer_journey.drop(columns=['I','H','C'])
+    # Drop the I, H, and C columns
+    df_attribution_customer_journey = df_attribution_customer_journey.drop(columns=['I', 'H', 'C'])
+    
+    # Return the final DataFrame with customer journey attributions
     return df_attribution_customer_journey
 
 def create_channel_reporting(df_session_sources, df_session_costs, df_attribution_customer_journey, df_conversions):
